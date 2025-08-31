@@ -1,2 +1,2 @@
 # Chincheti
-Proyecto de titulacion para tecnologoen desarrollo de software
+Proyecto de titulacion para tecnologo en desarrollo de software
