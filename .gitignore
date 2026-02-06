@@ -1,0 +1,17 @@
+# Ignorar dependencias
+node_modules/
+**/node_modules/
+
+# Ignorar archivos de entorno
+.env
+
+# Ignorar logs
+*.log
+
+# Ignorar carpetas de sistema
+.DS_Store
+
+# Ignorar las imágenes de barcodes generadas (ya lo habíamos configurado)
+backend/public/barcodes/*.png
+!backend/public/barcodes/.gitkeep
+

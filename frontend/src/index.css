@@ -1,0 +1,479 @@
+/* ==========================================================================
+   RESET Y ESTILOS BASE
+   ========================================================================== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+:root {
+  --azul-oscuro: #003366;
+  --azul-medio: #0056b3;
+  --azul-claro: #1e90ff;
+  --fondo-body: #004080;
+  --blanco: #ffffff;
+  --texto: #333;
+  
+  /* --- COLORES DE ESTADO (RQF7.1) --- */
+  --badge-disponible: #28a745; /* Verde */
+  --badge-espera: #fd7e14;     /* Naranja (Lista de espera) */
+  --badge-prestado: #007bff;   /* Azul */
+  --badge-mant: #ffc107;       /* Amarillo */
+  --badge-baja: #6c757d;       /* Gris */
+  --badge-enuso: #dc3545;      /* Rojo (Fallback o En Uso crítico) */
+  --badge-agotado: #dc3545;    /* Rojo */
+  
+  --sidebar-width: 250px;
+}
+
+body {
+  background: linear-gradient(135deg, var(--azul-oscuro), var(--azul-medio));
+  color: var(--texto);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   LAYOUT PRINCIPAL (DASHBOARD)
+   ========================================================================== */
+.dashboard {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+}
+
+.sidebar {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  background: transparent;
+  color: white;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 20px 15px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar .logo { text-align: center; margin-bottom: 30px; }
+.sidebar ul { list-style: none; }
+.sidebar ul li { margin-bottom: 8px; }
+.sidebar ul li a {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 15px;
+  border-radius: 10px;
+  color: rgba(255,255,255,0.8);
+  text-decoration: none;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+.sidebar ul li a:hover {
+  background: rgba(255,255,255,0.1);
+  color: white;
+  transform: translateX(5px);
+}
+
+/* ÁREA BLANCA DE CONTENIDO */
+.main-content {
+  flex: 1;
+  margin: 15px 15px 15px 0; 
+  background: #f8f9fa;
+  border-radius: 20px;
+  box-shadow: -5px 0 15px rgba(0,0,0,0.1);
+  padding: 25px 35px;
+  height: calc(100vh - 30px);
+  overflow-y: auto;
+  position: relative;
+}
+
+/* ==========================================================================
+   VALES Y LISTAS (COMPACTO Y RESPONSIVO)
+   ========================================================================== */
+.vales-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.vale {
+  background: white;
+  border-radius: 10px;
+  padding: 12px 15px; 
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  border: 1px solid #e1e4e8;
+  border-left-width: 5px; 
+  font-size: 0.85rem; 
+}
+
+.vale-header { display: flex; justify-content: space-between; font-weight: bold; color: #444; margin-bottom: 5px; }
+.vale-items { margin-bottom: 10px; color: #666; }
+.vale-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 5px; padding-top: 8px; border-top: 1px solid #f0f0f0; }
+
+/* ==========================================================================
+   ESTADÍSTICAS (COMPACTO)
+   ========================================================================== */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
+  gap: 15px;
+  margin-top: 15px;
+}
+
+.chart-card {
+  background: white;
+  padding: 15px;
+  border-radius: 12px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  border: 1px solid #e1e4e8;
+  display: flex;
+  flex-direction: column;
+  height: 220px; 
+}
+
+/* ==========================================================================
+   COMPONENTES GENERALES
+   ========================================================================== */
+.input-box {
+  display: flex; align-items: center; background: #f1f3f5;
+  padding: 8px 12px; border-radius: 6px; margin-bottom: 12px;
+}
+.input-box input, .input-box select, .input-box textarea { border: none; background: transparent; outline: none; width: 100%; font-size: 14px; }
+
+.btn, button {
+  padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 600; border: none; cursor: pointer; transition: 0.2s;
+}
+.btn.confirm, button[type="submit"] { background: var(--azul-claro); color: white; }
+.btn.cancel { background: #e2e6ea; color: #333; }
+.btn.aprobar { background: var(--badge-disponible); color: white; padding: 6px 12px; font-size: 0.8rem; }
+.btn.rechazar { background: var(--badge-enuso); color: white; padding: 6px 12px; font-size: 0.8rem; }
+.btn-item { padding: 6px 12px; font-size: 0.8rem; border-radius: 5px; text-decoration: none; background: var(--azul-claro); color: white; }
+
+/* Estilo para botón de Lista de Espera (Naranja) */
+.btn-warning { background: var(--badge-espera) !important; color: white !important; }
+.btn-warning:hover { background: #e67e22 !important; }
+
+.data-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05); font-size: 0.85rem; }
+.data-table th { background: var(--azul-oscuro); color: white; padding: 10px; text-align: left; font-weight: 600; }
+.data-table td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+
+/* --- BADGES / ETIQUETAS (ACTUALIZADO RQF7.1) --- */
+.badge { padding: 3px 8px; border-radius: 12px; color: white; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; }
+
+/* Mapeo de colores nuevos */
+.badge.disponible { background: var(--badge-disponible); }
+.badge.espera { background: var(--badge-espera); color: white; } /* Lista Espera */
+.badge.prestado { background: var(--badge-prestado); } /* Azul */
+.badge.mantenimiento { background: var(--badge-mant); color: black; } /* Amarillo */
+.badge.baja { background: var(--badge-baja); } /* Gris */
+.badge.enuso { background: var(--badge-enuso); } /* Rojo */
+.badge.agotado { background: var(--badge-agotado); } /* Rojo */
+.badge.entregado { background: #3b82f6; } /* Azul claro */
+
+.modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; backdrop-filter: blur(2px); }
+.modal-panel { background: white; padding: 20px; border-radius: 15px; width: 700px; max-width: 95%; max-height: 90vh; overflow-y: auto; box-shadow: 0 15px 30px rgba(0,0,0,0.3); }
+.modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+/* ==========================================================================
+   RESPONSIVE (Móvil)
+   ========================================================================== */
+.menu-toggle { display: none; font-size: 24px; border: none; background: none; color: var(--azul-oscuro); cursor: pointer; }
+
+@media (max-width: 900px) {
+  .sidebar { position: fixed; left: -260px; background: #0b2a5f; z-index: 2000; transition: left 0.3s; }
+  .sidebar.open { left: 0; }
+  .main-content { margin: 0; width: 100%; border-radius: 0; height: 100vh; padding: 15px; }
+  .menu-toggle { display: block; margin-right: 10px; }
+  .modal-grid, .charts-grid, .vales-container { grid-template-columns: 1fr; }
+  
+  .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1500; display: none; }
+  .sidebar-overlay.show { display: block; }
+}
+
+/* ==========================================================================
+   ESTILOS LOGIN (TUS ESTILOS PERSONALIZADOS)
+   ========================================================================== */
+
+/* Contenedor Principal (Sobrescribe estilos base) */
+.login-page-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    width: 100vw;
+    background: linear-gradient(135deg, #003366 0%, #001a33 100%);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    position: fixed; /* Asegura que cubra todo */
+    top: 0; left: 0;
+    z-index: 9999;
+    overflow: hidden;
+}
+
+/* Efecto de fondo giratorio */
+.login-background::before {
+    content: "";
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 60%);
+    animation: rotate 60s linear infinite;
+}
+
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Tarjeta del Login */
+.login-card {
+    background: white;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    width: 100%;
+    max-width: 400px;
+    z-index: 10;
+    position: relative;
+    animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Encabezado y Logo */
+.login-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.login-logo {
+    max-width: 150px; 
+    height: auto;
+    margin-bottom: 15px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.login-header h2 {
+    color: #003366;
+    margin: 10px 0 5px;
+    font-size: 1.5rem;
+}
+
+.login-header p {
+    color: #666;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+/* Formulario */
+.input-group {
+    margin-bottom: 20px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #333;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.form-input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 1rem;
+    transition: border-color 0.3s;
+    box-sizing: border-box;
+}
+
+.form-input:focus {
+    border-color: #003366;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(0, 51, 102, 0.1);
+}
+
+.input-group small {
+    color: #888;
+    font-size: 0.75rem;
+    display: block;
+    margin-top: 5px;
+}
+
+/* Botones Login */
+.btn-login {
+    width: 100%;
+    padding: 12px;
+    background-color: #003366;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.btn-login:hover {
+    background-color: #002244;
+}
+
+.btn-login:disabled {
+    background-color: #889bb0;
+    cursor: not-allowed;
+}
+
+.btn-success {
+    width: 100%;
+    padding: 12px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.btn-success:hover {
+    background-color: #218838;
+}
+
+/* Alertas Login */
+.alert-error {
+    background-color: #ffebee;
+    color: #c62828;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+    border-left: 4px solid #c62828;
+}
+
+.alert-warning {
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+    border-left: 4px solid #ffc107;
+}
+
+/* Pie de página Login */
+.login-footer {
+    text-align: center;
+    margin-top: 30px;
+    border-top: 1px solid #eee;
+    padding-top: 20px;
+}
+
+.login-footer p {
+    color: #aaa;
+    font-size: 0.8rem;
+    margin: 0;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+/* --- ESTILOS DEL SCROLLBAR DEL SIDEBAR --- */
+
+/* 1. Definimos el tamaño y comportamiento de la lista */
+.sidebar-menu-scroll {
+  /* Movemos aquí la altura que tenías en línea */
+  max-height: calc(100vh - 200px); 
+  
+  /* Habilitamos el scroll */
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  /* Estilo para Firefox */
+  scrollbar-width: thin; /* Barra delgada */
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+/* 2. Personalización para Chrome, Edge y Safari */
+
+/* Ancho de la barra */
+.sidebar-menu-scroll::-webkit-scrollbar {
+  width: 5px; /* Muy sutil */
+}
+
+/* El fondo por donde corre la barra (transparente) */
+.sidebar-menu-scroll::-webkit-scrollbar-track {
+  background: transparent; 
+}
+
+/* La barra en sí (la "manija") */
+.sidebar-menu-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.15); /* Blanco muy tenue */
+  border-radius: 10px; /* Redondeado */
+}
+
+/* Efecto al pasar el mouse sobre la barra */
+.sidebar-menu-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.4); /* Se ilumina un poco */
+}
+
+/* Renglón de incidencia abierta */
+tr.row-abierta {
+    background-color: #fff0f0;
+}
+tr.row-abierta:hover {
+    background-color: #ffe0e0;
+}
+
+/* Asegurar zona de toque mínima (RQNF33.3) */
+button, .btn, .btn-item, select, input {
+    min-height: 48px;
+    min-width: 48px;
+    font-size: 16px; 
+    -webkit-tap-highlight-color: transparent; 
+    touch-action: manipulation;
+}
+
+/* Navegación lateral adaptable */
+@media (max-width: 768px) {
+    .sidebar {
+        width: 100%;
+        height: auto;
+        position: relative;
+    }
+    .main-content {
+        margin-left: 0;
+    }
+    .vales-container {
+        grid-template-columns: 1fr; /* Cards en una sola columna en móvil */
+    }
+    .app-container {
+        padding: 10px;
+    }
+    .card {
+        overflow-x: auto;
+    }
+}

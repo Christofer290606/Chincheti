@@ -5,7 +5,14 @@ import {
   getValeById,
   gestionarVale,
   registrarEntrega,
-  registrarDevolucion
+  registrarDevolucion,
+  actualizarVale,
+  getAsesores,
+  getReporteRechazos,
+  cancelarVale,
+  getHistorialUsuario,
+  getReportePrestamos,
+  validarDuplicidadPrevia
 } from '../controllers/valeController.js';
 
 import {
@@ -15,50 +22,48 @@ import {
 
 const router = Router();
 
+router.get('/asesores', authMiddleware, getAsesores);
 
-// POST /api/vales - Crear una nueva solicitud de vale
-router.post(
-  '/',
-  authMiddleware, // Todos los autenticados pueden crear
-  crearVale
-);
+// POST /api/vales
+router.post('/', authMiddleware, crearVale);
+router.post('/validar-duplicidad', authMiddleware, validarDuplicidadPrevia);
 
-// GET /api/vales - Obtener lista de vales, filtrada por rol
-router.get(
-  '/',
-  authMiddleware, // Todos ven sus vales o los que gestionan
-  getVales
-);
+// GET /api/vales
+router.get('/', authMiddleware, getVales);
 
-// GET /api/vales/:id - Obtener detalle de 1 vale
-router.get(
-  '/:id',
-  authMiddleware, // Todos pueden ver, con la logica de permisos aplicada
-  getValeById
-);
-
-// PATCH /api/vales/:id/gestion - Aprobar o Rechazar un vale
-router.patch(
-  '/:id/gestion',
-  authMiddleware, // Debería ser Maestro, Almacenista o Coordinador
+router.get('/reporte-rechazos', authMiddleware, getReporteRechazos);
+router.get('/historial/:id_usuario', authMiddleware, getHistorialUsuario);
+router.put( 
+  '/:id/gestionar', // <--- Debe coincidir con la URL del frontend (/gestionar)
+  authMiddleware, 
   gestionarVale
 );
 
-// POST /api/vales/:id/entregar - Almacenista registra la entrega, con lector
+router.get('/reporte-prestamos', authMiddleware, getReportePrestamos);
+// ----------------------------------
+
+// POST /api/vales/:id/entregar
 router.post(
-  '/:id/entregar',
+  '/:id/entregar', // Ojo: Verifica si tu frontend llama a 'entregar' o 'entrega'
   authMiddleware,
-  almacenistaCoordinadorMiddleware, // Solo Almacenista/Coordinador
+  almacenistaCoordinadorMiddleware,
   registrarEntrega
 );
 
-// POST /api/vales/:id/devolver - Almacenista registra la devolución, con lector
+// POST /api/vales/:id/devolver
 router.post(
-  '/:id/devolver',
+  '/:id/devolver', // Ojo: Verifica si tu frontend llama a 'devolver' o 'devolucion'
   authMiddleware,
-  almacenistaCoordinadorMiddleware, // Solo Almacenista/Coord
+  almacenistaCoordinadorMiddleware,
   registrarDevolucion
 );
 
+router.put('/:id/cancelar', authMiddleware, cancelarVale);
+
+// GET /api/vales/:id
+router.get('/:id', authMiddleware, getValeById);
+
+// PUT /api/vales/:id
+router.put('/:id', authMiddleware, actualizarVale);
 
 export default router;

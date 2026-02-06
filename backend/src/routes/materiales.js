@@ -1,67 +1,35 @@
 import { Router } from 'express';
-import {
-  getCatalogos,
-  crearMaterial,
-  getMateriales,
-  getMaterialById,
-  actualizarMaterial,
-  bajaUnidad,
-  getUnidadByBarcode
-} from '../controllers/materialController.js';
-
+import { authMiddleware, almacenistaCoordinadorMiddleware } from '../middlewares/auth.js';
 import { 
-  authMiddleware, 
-  almacenistaCoordinadorMiddleware 
-} from '../middlewares/auth.js';
+  getMateriales, 
+  getMaterialById, 
+  crearMaterial, 
+  actualizarMaterial, 
+  getCatalogos,
+  bajaUnidad,
+  getUnidadByBarcode,
+  buscarMaterialesYUnidades 
+} from '../controllers/materialController.js';
 
 const router = Router();
 
+// --- RUTAS PÚBLICAS (O REQUIEREN SOLO AUTH) ---
+router.get('/', authMiddleware, getMateriales);
+router.get('/catalogos', authMiddleware, getCatalogos);
 
-// GET /catalogos -> authMiddleware -> getCatalogos 
-router.get(
-  '/catalogos',
-  authMiddleware,
-  getCatalogos
-);
+// --- RUTA DE BÚSQUEDA POR BARCODE (NUEVA) ---
+// Debe ir ANTES de /:id para evitar conflictos
+router.get('/unidad/:barcode', authMiddleware, getUnidadByBarcode);
+router.get('/buscador', authMiddleware, buscarMaterialesYUnidades);
 
-// POST /materiales -> authMiddleware -> almacenistaCoordinadorMiddleware -> crearMaterial
-router.post(
-  '/',
-  authMiddleware,
-  almacenistaCoordinadorMiddleware,
-  crearMaterial
-);
+// --- DETALLE POR ID ---
+router.get('/:id', authMiddleware, getMaterialById);
 
-router.get(
-  '/',
-  authMiddleware, // Todos los usuarios autenticados pueden ver la lista
-  getMateriales
-);
+// --- RUTAS PROTEGIDAS (ALMACENISTA/COORDINADOR) ---
+router.post('/', authMiddleware, almacenistaCoordinadorMiddleware, crearMaterial);
+router.put('/:id', authMiddleware, almacenistaCoordinadorMiddleware, actualizarMaterial);
 
-router.get(
-  '/:id',
-  authMiddleware, // Todos pueden ver el detalle
-  getMaterialById
-);
-
-router.put(
-  '/:id',
-  authMiddleware,
-  almacenistaCoordinadorMiddleware,
-  actualizarMaterial
-);
-
-router.get(
-  '/unidades/barcode/:barcode',
-  authMiddleware, // Solo usuarios autenticados pueden acceder
-  getUnidadByBarcode
-);
-
-router.patch(
-  '/unidades/:id/baja',
-  authMiddleware,
-  almacenistaCoordinadorMiddleware,
-  bajaUnidad
-);
+// Baja de unidad específica
+router.patch('/unidades/:id/baja', authMiddleware, almacenistaCoordinadorMiddleware, bajaUnidad);
 
 export default router;

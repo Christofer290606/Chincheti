@@ -1,308 +1,320 @@
-import db from '../config/db.js'; 
+import db from '../config/db.js';
+import bwipjs from 'bwip-js'; 
+import fs from 'fs';          
+import path from 'path';      
+import { fileURLToPath } from 'url';
 
-/**
- * GET /api/catalogos
- * Obtiene todos los catálogos necesarios para los formularios de inventario.
- */
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const BARCODE_DIR = path.join(__dirname, '../public/barcodes');
+
+// Asegurar que el directorio de códigos de barras existe
+if (!fs.existsSync(BARCODE_DIR)){
+    fs.mkdirSync(BARCODE_DIR, { recursive: true });
+}
+
+// --- RQF25: BUSCADOR UNIVERSAL (CORREGIDO) ---
+export const buscarMaterialesYUnidades = async (req, res) => {
+    const { q } = req.query;
+    // Extraemos datos del usuario (Soporta tanto 'rol' como 'nombre_rol' por seguridad)
+    const { nombre_rol, rol, id_almacen, id_carrera } = req.usuario; 
+    const userRol = nombre_rol || rol; // Usamos el que venga definido
+
+    if (!q || q.length < 3) {
+        return res.status(400).json({ error: "Ingrese al menos 3 caracteres." });
+    }
+
+    const pool = db.promise();
+
+    try {
+        let query = `
+            SELECT 
+                u.id_unidad, 
+                u.identificador_barcode, 
+                u.id_estado, 
+                em.nombre_estado,
+                m.id_material, 
+                m.nombre as nombre_material, 
+                m.marca, 
+                m.modelo,
+                c.nombre_categoria,
+                a.nombre_almacen
+            FROM Tbl_Unidades_Material u
+            JOIN Tbl_Materiales m ON u.id_material_base = m.id_material
+            JOIN Tbl_Categorias c ON m.id_categoria = c.id_categoria
+            JOIN Tbl_Estados_Material em ON u.id_estado = em.id_estado
+            JOIN Tbl_Almacenes a ON m.id_almacen = a.id_almacen
+            WHERE (u.identificador_barcode LIKE ? OR m.nombre LIKE ?)
+        `;
+
+        const params = [`%${q}%`, `%${q}%`];
+
+        // --- FILTROS DE SEGURIDAD ---
+        
+        // 1. ALMACENISTA: Solo ve SU almacén
+        if (userRol === 'almacenista') {
+            if (!id_almacen) return res.json([]); 
+            query += ` AND m.id_almacen = ?`;
+            params.push(id_almacen);
+        }
+        
+        // 2. COORDINADOR: Solo ve materiales de SU carrera
+        else if (userRol === 'coordinador') {
+            if (!id_carrera) return res.json([]); 
+            query += ` AND a.id_carrera = ?`;
+            params.push(id_carrera);
+        }
+
+        // --- ORDENAMIENTO ---
+        query += `
+            ORDER BY 
+                CASE 
+                    WHEN u.identificador_barcode = ? THEN 1
+                    WHEN m.nombre = ? THEN 2
+                    ELSE 3 
+                END ASC,
+                m.nombre ASC
+            LIMIT 20
+        `;
+        
+        params.push(q, q);
+
+        const [resultados] = await pool.query(query, params);
+        res.json(resultados);
+
+    } catch (error) {
+        console.error("Error en buscador:", error);
+        res.status(500).json({ error: "Error en el servidor al buscar." });
+    }
+};
+
 export const getCatalogos = async (req, res) => {
   try {
     const [categorias] = await db.promise().query("SELECT id_categoria, nombre_categoria FROM Tbl_Categorias ORDER BY nombre_categoria");
-    const [almacenes] = await db.promise().query("SELECT id_almacen, nombre_almacen, codigo_almacen FROM Tbl_Almacenes ORDER BY nombre_almacen");
+    const [almacenes] = await db.promise().query("SELECT id_almacen, nombre_almacen, codigo_almacen,id_carrera FROM Tbl_Almacenes ORDER BY nombre_almacen");
     const [carreras] = await db.promise().query("SELECT id_carrera, nombre_carrera, codigo_carrera FROM Tbl_Carreras ORDER BY nombre_carrera");
     const [estados] = await db.promise().query("SELECT id_estado, nombre_estado FROM Tbl_Estados_Material ORDER BY id_estado");
-
-    res.status(200).json({
-      categorias,
-      almacenes,
-      carreras,
-      estados_material: estados
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al obtener los catálogos' });
-  }
+    res.status(200).json({ categorias, almacenes, carreras, estados_material: estados });
+  } catch (error) { console.error(error); res.status(500).json({ error: 'Error catálogos' }); }
 };
 
-/**
- * GET /api/materiales
- * Obtiene la lista general de materiales con conteo de unidades.
- */
 export const getMateriales = async (req, res) => {
   try {
-    // Obtiene la lista general con conteo de disponibilidad
     const query = `
-      SELECT
-        m.id_material,
-        m.nombre,
-        c.nombre_categoria,
-        (SELECT COUNT(u.id_unidad) FROM Tbl_Unidades_Material u WHERE u.id_material_base = m.id_material) AS total_unidades,
-        (SELECT COUNT(u.id_unidad) FROM Tbl_Unidades_Material u JOIN Tbl_Estados_Material e ON u.id_estado = e.id_estado WHERE u.id_material_base = m.id_material AND e.nombre_estado = 'Disponible') AS unidades_disponibles
+      SELECT 
+        m.*,
+        a.nombre_almacen,
+        a.id_carrera as id_carrera_almacen,
+        m.solo_maestros,
+        m.semestre_minimo,
+        (SELECT COUNT(*) FROM Tbl_Unidades_Material u JOIN Tbl_Estados_Material em ON u.id_estado = em.id_estado WHERE u.id_material_base = m.id_material AND em.nombre_estado = 'Disponible') as conteo_disponible,
+        (SELECT COUNT(*) FROM Tbl_Unidades_Material u JOIN Tbl_Estados_Material em ON u.id_estado = em.id_estado WHERE u.id_material_base = m.id_material AND em.nombre_estado = 'Prestado') as conteo_prestado,
+        (SELECT COUNT(*) FROM Tbl_Unidades_Material u JOIN Tbl_Estados_Material em ON u.id_estado = em.id_estado WHERE u.id_material_base = m.id_material AND em.nombre_estado LIKE '%Mantenimiento%') as conteo_mantenimiento,
+        (SELECT COUNT(*) FROM Tbl_Unidades_Material u JOIN Tbl_Estados_Material em ON u.id_estado = em.id_estado WHERE u.id_material_base = m.id_material AND em.nombre_estado = 'Baja') as conteo_baja,
+        (SELECT COUNT(*) FROM Tbl_Unidades_Material u JOIN Tbl_Estados_Material em ON u.id_estado = em.id_estado WHERE u.id_material_base = m.id_material AND em.nombre_estado IN ('Disponible', 'Prestado', 'Mantenimiento', 'En Mantenimiento')) as stock_total
       FROM Tbl_Materiales m
-      JOIN Tbl_Categorias c ON m.id_categoria = c.id_categoria
-      ORDER BY m.nombre;
+      JOIN Tbl_Almacenes a ON m.id_almacen = a.id_almacen
     `;
-    
     const [materiales] = await db.promise().query(query);
-    res.status(200).json({ materiales });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al obtener los materiales' });
-  }
+    res.json({ materiales });
+  } catch (error) { console.error(error); res.status(500).json({ error: 'Error al obtener materiales' }); }
 };
 
-/**
- * GET /api/materiales/:id
- * Obtiene el detalle de una plantilla de material Y la lista de sus unidades físicas.
- */
 export const getMaterialById = async (req, res) => {
   const { id } = req.params;
   try {
-    // 1. Obtener detalle de la plantilla
-    const [materiales] = await db.promise().query("SELECT * FROM Tbl_Materiales WHERE id_material = ?", [id]);
-    if (materiales.length === 0) {
-      return res.status(404).json({ error: 'Material no encontrado' });
-    }
-    const detalle_material = materiales[0];
-
-    // 2. Obtener sus unidades físicas
-    const queryUnidades = `
-      SELECT
-        u.id_unidad,
-        u.identificador_barcode,
-        e.nombre_estado,
-        e.color_tag
-      FROM Tbl_Unidades_Material u
-      JOIN Tbl_Estados_Material e ON u.id_estado = e.id_estado
-      WHERE u.id_material_base = ?
-      ORDER BY u.identificador_barcode;
+    const queryMaterial = `
+      SELECT m.*, a.nombre_almacen, a.id_carrera as id_carrera_almacen, m.solo_maestros, m.semestre_minimo,
+        (SELECT COUNT(*) FROM Tbl_Unidades_Material u JOIN Tbl_Estados_Material em ON u.id_estado = em.id_estado WHERE u.id_material_base = m.id_material AND em.nombre_estado = 'Disponible') as conteo_disponible,
+        (SELECT COUNT(*) FROM Tbl_Unidades_Material u WHERE u.id_material_base = m.id_material) as stock_total
+      FROM Tbl_Materiales m JOIN Tbl_Almacenes a ON m.id_almacen = a.id_almacen WHERE m.id_material = ?
     `;
-    const [unidades] = await db.promise().query(queryUnidades, [id]);
+    const [rowsMat] = await db.promise().query(queryMaterial, [id]);
+    if (rowsMat.length === 0) return res.status(404).json({ error: 'Material no encontrado' });
 
-    res.status(200).json({ detalle_material, unidades });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al obtener el detalle del material' });
-  }
+    const queryUnidades = `
+        SELECT u.id_unidad, u.identificador_barcode, e.nombre_estado
+        FROM Tbl_Unidades_Material u JOIN Tbl_Estados_Material e ON u.id_estado = e.id_estado
+        WHERE u.id_material_base = ? ORDER BY u.identificador_barcode ASC
+    `;
+    const [rowsUnits] = await db.promise().query(queryUnidades, [id]);
+    res.json({ detalle_material: rowsMat[0], unidades: rowsUnits });
+  } catch (error) { console.error(error); res.status(500).json({ error: 'Error al obtener el detalle del material' }); }
 };
 
-
-/**
- * POST /api/materiales
- * Crea una nueva plantilla de material Y sus unidades físicas correspondientes.
- * Utiliza transacciones para asegurar la integridad.
- */
 export const crearMaterial = async (req, res) => {
-  const {
-    nombre, marca, modelo, ano_modelo, id_categoria, id_almacen,
-    id_carrera_exclusiva, plan_mto_dias, plan_mto_usos, mto_ligeros_max,
-    descripcion, mto_es_interno, cantidad
-  } = req.body;
+  let { nombre, marca, modelo, ano_modelo, id_categoria, id_almacen, id_carrera_exclusiva, plan_mto_dias, plan_mto_usos, mto_ligeros_max, descripcion, mto_es_interno, cantidad } = req.body;
+  const usuario = req.usuario;
+  const userRol = usuario.nombre_rol || usuario.rol;
 
-  // Validación básica
-  if (!nombre || !marca || !modelo || !ano_modelo || !id_categoria || !id_almacen || !cantidad) {
-    return res.status(400).json({ error: 'Faltan campos obligatorios' });
+  if (userRol === 'almacenista') {
+    if (usuario.id_almacen && parseInt(id_almacen) !== usuario.id_almacen) return res.status(403).json({ error: 'Solo puedes registrar en tu almacén.' });
   }
+  if (!nombre || !marca || !modelo || !ano_modelo || !id_categoria || !id_almacen || !cantidad) return res.status(400).json({ error: 'Faltan campos obligatorios' });
   
-  const connection = await db.promise().getConnection();
-  
+  const currentYear = new Date().getFullYear();
+  if (parseInt(ano_modelo) < 2000 || parseInt(ano_modelo) > currentYear + 1) return res.status(400).json({ error: 'Año inválido' });
+  if (!Number.isInteger(Number(cantidad)) || Number(cantidad) <= 0) return res.status(400).json({ error: 'Cantidad inválida' });
+
+  const pool = db.promise();
+  const connection = await pool.getConnection();
+
   try {
     await connection.beginTransaction();
 
-    // 1. Insertar la plantilla (Tbl_Materiales)
-    const queryMaterial = `
-      INSERT INTO Tbl_Materiales (
-        nombre, descripcion, marca, modelo, ano_modelo, id_categoria, id_almacen, 
-        id_carrera_exclusiva, plan_mto_dias, plan_mto_usos, mto_es_interno, mto_ligeros_max
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-    `;
-    const [resultMaterial] = await connection.query(queryMaterial, [
-      nombre, descripcion || null, marca, modelo, ano_modelo, id_categoria, id_almacen,
-      id_carrera_exclusiva || null, plan_mto_dias || null, plan_mto_usos || null,
-      mto_es_interno || true, mto_ligeros_max || 0
-    ]);
-    
-    const id_material_nuevo = resultMaterial.insertId;
+    const [catData] = await connection.query("SELECT nombre_categoria FROM Tbl_Categorias WHERE id_categoria = ?", [id_categoria]);
+    const esConsumible = (catData[0].nombre_categoria === 'Consumible');
+    if (!esConsumible && !plan_mto_dias && !plan_mto_usos) {
+        // Rollback manual antes de lanzar error, aunque el catch lo haría
+        await connection.rollback();
+        connection.release();
+        return res.status(400).json({ error: 'El plan de mantenimiento es obligatorio para Equipos/Herramientas.' });
+    }
 
-    // 2. Obtener datos para generar el codigo de barras
-    const [categoriaData] = await connection.query("SELECT nombre_categoria FROM Tbl_Categorias WHERE id_categoria = ?", [id_categoria]);
-    const [almacenData] = await connection.query("SELECT codigo_almacen FROM Tbl_Almacenes WHERE id_almacen = ?", [id_almacen]);
-    let codigoCarrera = 'GEN'; // General si es nulo
+    const [resultMat] = await connection.query(`INSERT INTO Tbl_Materiales (nombre, descripcion, marca, modelo, ano_modelo, id_categoria, id_almacen, id_carrera_exclusiva, plan_mto_dias, plan_mto_usos, mto_es_interno, mto_ligeros_max, proximo_id_unidad) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`, 
+    [nombre, descripcion, marca, modelo, ano_modelo, id_categoria, id_almacen, id_carrera_exclusiva || null, plan_mto_dias, plan_mto_usos, mto_es_interno, mto_ligeros_max]);
+    const id_material_nuevo = resultMat.insertId;
+
+    const [almData] = await connection.query("SELECT codigo_almacen FROM Tbl_Almacenes WHERE id_almacen = ?", [id_almacen]);
+    let codCarrera = 'GEN';
     if (id_carrera_exclusiva) {
-      const [carreraData] = await connection.query("SELECT codigo_carrera FROM Tbl_Carreras WHERE id_carrera = ?", [id_carrera_exclusiva]);
-      if (carreraData.length > 0) {
-        codigoCarrera = carreraData[0].codigo_carrera;
-      }
-    }
-    
-    const nombreCategoria = categoriaData[0].nombre_categoria;
-    const prefijoNombre = nombre.substring(0, 3).toUpperCase();
-    const idMaterialStr = String(id_material_nuevo).padStart(6, '0');
-    const codigoAlmacen = almacenData[0].codigo_almacen;
-
-    const barcodeBase = `${prefijoNombre}${idMaterialStr}${codigoCarrera}${codigoAlmacen}`;
-    
-    // 3. Insertar las Unidades Físicas
-    const [estadoDefault] = await connection.query("SELECT id_estado FROM Tbl_Estados_Material WHERE nombre_estado = 'Disponible'");
-    const id_estado_disponible = estadoDefault[0].id_estado;
-
-    const unidades_creadas = [];
-    
-    // Si es Consumible, crear 1 solo registro con la cantidad
-    if (nombreCategoria === 'Consumible') {
-      const barcode = barcodeBase;
-      const queryUnidad = "INSERT INTO Tbl_Unidades_Material (id_material_base, identificador_barcode, id_estado, cantidad_stock) VALUES (?, ?, ?, ?)";
-      const [resultUnidad] = await connection.query(queryUnidad, [id_material_nuevo, barcode, id_estado_disponible, cantidad]);
-      unidades_creadas.push({ id_unidad: resultUnidad.insertId, identificador_barcode: barcode });
-    } 
-    // Si es Equipo o Herramienta, crear N registros
-    else {
-      const queryUnidad = "INSERT INTO Tbl_Unidades_Material (id_material_base, identificador_barcode, id_estado, cantidad_stock) VALUES (?, ?, ?, ?)";
-      for (let i = 0; i < cantidad; i++) {
-        // Manejo de duplicados: si cantidad > 1, añade un sufijo
-        const barcode = (i === 0) ? barcodeBase : `${barcodeBase}-${i + 1}`; 
-        
-        const [resultUnidad] = await connection.query(queryUnidad, [id_material_nuevo, barcode, id_estado_disponible, 1]);
-        unidades_creadas.push({ id_unidad: resultUnidad.insertId, identificador_barcode: barcode });
-      }
+        const [carData] = await connection.query("SELECT codigo_carrera FROM Tbl_Carreras WHERE id_carrera = ?", [id_carrera_exclusiva]);
+        if(carData.length) codCarrera = carData[0].codigo_carrera;
     }
 
-    // 4. Confirmar transacción
+    const prefijoNombre = nombre.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, 'X');
+    const codAlmacen = almData[0].codigo_almacen;
+    const [contadorRow] = await connection.query("SELECT proximo_id_unidad FROM Tbl_Materiales WHERE id_material = ? FOR UPDATE", [id_material_nuevo]);
+    let contador_actual = contadorRow[0].proximo_id_unidad;
+
+    const [stDisp] = await connection.query("SELECT id_estado FROM Tbl_Estados_Material WHERE nombre_estado = 'Disponible'");
+    const id_disp = stDisp[0].id_estado;
+    const loops = esConsumible ? 1 : cantidad;
+    const stock = esConsumible ? cantidad : 1;
+
+    for (let i = 0; i < loops; i++) {
+        const idUnidadStr = String(contador_actual).padStart(6, '0');
+        let barcodeFinal = `${prefijoNombre}${idUnidadStr}${codCarrera}${codAlmacen}`;
+        let esUnico = false;
+        let suffix = 0;
+
+        while (!esUnico) {
+            if (suffix > 0) barcodeFinal = `${prefijoNombre}${idUnidadStr}${codCarrera}${codAlmacen}-${suffix}`;
+            const [check] = await connection.query("SELECT id_unidad FROM Tbl_Unidades_Material WHERE identificador_barcode = ?", [barcodeFinal]);
+            if (check.length === 0) esUnico = true;
+            else suffix++;
+        }
+
+        try {
+            const png = await bwipjs.toBuffer({
+                bcid:        'code128',
+                text:        barcodeFinal,
+                scale:       3,
+                height:      20,
+                includetext: true,
+                textxalign:  'center',
+                backgroundcolor: 'FFFFFF',
+            });
+            fs.writeFileSync(path.join(BARCODE_DIR, `${barcodeFinal}.png`), png);
+        } catch (e) {
+            console.error("Error generando imagen barcode:", e);
+        }
+
+        const [uRes] = await connection.query("INSERT INTO Tbl_Unidades_Material (id_material_base, identificador_barcode, id_estado, cantidad_stock) VALUES (?, ?, ?, ?)", [id_material_nuevo, barcodeFinal, id_disp, stock]);
+        await connection.query("INSERT INTO Tbl_Historial_Materiales (id_material, id_unidad, accion, descripcion_cambio, id_usuario_responsable) VALUES (?, ?, ?, ?, ?)", [id_material_nuevo, uRes.insertId, 'CREACION', `Alta inicial: ${barcodeFinal}`, usuario.id_usuario]);
+        contador_actual++;
+    }
+
+    await connection.query("UPDATE Tbl_Materiales SET proximo_id_unidad = ? WHERE id_material = ?", [contador_actual, id_material_nuevo]);
     await connection.commit();
-    connection.release();
-    
-    res.status(201).json({
-      mensaje: 'Material y unidades creados exitosamente',
-      id_material: id_material_nuevo,
-      unidades_creadas
-    });
+    res.status(201).json({ mensaje: 'Material registrado exitosamente' });
 
   } catch (error) {
-    console.error('Error en la transacción:', error);
-    await connection.rollback();
-    connection.release();
-    res.status(500).json({ error: 'Error al crear el material', detalle: error.message });
+    if (connection) await connection.rollback();
+    console.error(error); 
+    res.status(500).json({ error: error.message });
+  } finally {
+    if (connection) connection.release();
   }
 };
 
-/**
- * PUT /api/materiales/:id
- * Actualiza la información de la plantilla de un material.
- */
 export const actualizarMaterial = async (req, res) => {
   const { id } = req.params;
-  const {
-    nombre, marca, modelo, ano_modelo, id_categoria, id_almacen,
-    id_carrera_exclusiva, plan_mto_dias, plan_mto_usos, mto_ligeros_max,
-    descripcion, mto_es_interno
-  } = req.body;
-  
-  // Solo se pueden modificar estos campos
-  const query = `
-    UPDATE Tbl_Materiales SET
-      descripcion = ?,
-      marca = ?,
-      modelo = ?,
-      ano_modelo = ?,
-      id_categoria = ?,
-      id_almacen = ?,
-      id_carrera_exclusiva = ?,
-      plan_mto_dias = ?,
-      plan_mto_usos = ?,
-      mto_es_interno = ?,
-      mto_ligeros_max = ?
-    WHERE id_material = ?;
-  `;
+  const usuario = req.usuario;
+  const userRol = usuario.nombre_rol || usuario.rol;
+  const { descripcion, marca, modelo, ano_modelo, id_categoria, id_carrera_exclusiva, plan_mto_dias, plan_mto_usos, mto_es_interno, mto_ligeros_max, cantidad } = req.body;
+
+  const currentYear = new Date().getFullYear();
+  if (parseInt(ano_modelo) < 2000 || parseInt(ano_modelo) > currentYear + 1) return res.status(400).json({ error: 'Año inválido' });
+
+  // Transacción opcional aquí, pero recomendado si actualizamos varias tablas
+  const pool = db.promise();
+  const connection = await pool.getConnection();
 
   try {
-    const [result] = await db.promise().query(query, [
-      descripcion || null, marca, modelo, ano_modelo, id_categoria, id_almacen,
-      id_carrera_exclusiva || null, plan_mto_dias || null, plan_mto_usos || null,
-      mto_es_interno || true, mto_ligeros_max || 0,
-      id
-    ]);
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Material no encontrado' });
+    if (userRol === 'almacenista') {
+        const [check] = await connection.query("SELECT id_almacen FROM Tbl_Materiales WHERE id_material = ?", [id]);
+        if(check.length && usuario.id_almacen && check[0].id_almacen !== usuario.id_almacen) {
+             connection.release();
+             return res.status(403).json({error:"Material de otro almacén"});
+        }
     }
-    
-    res.status(200).json({ mensaje: 'Material actualizado exitosamente' });
 
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al actualizar el material' });
+    const [catData] = await connection.query("SELECT nombre_categoria FROM Tbl_Categorias WHERE id_categoria = ?", [id_categoria]);
+    const esConsumible = (catData[0].nombre_categoria === 'Consumible');
+    if (!esConsumible && !plan_mto_dias && !plan_mto_usos) {
+         connection.release();
+         return res.status(400).json({ error: 'Mantenimiento obligatorio.' });
+    }
+
+    const query = `UPDATE Tbl_Materiales SET descripcion=?, marca=?, modelo=?, ano_modelo=?, id_categoria=?, id_carrera_exclusiva=?, plan_mto_dias=?, plan_mto_usos=?, mto_es_interno=?, mto_ligeros_max=? WHERE id_material=?`;
+    await connection.query(query, [descripcion, marca, modelo, ano_modelo, id_categoria, id_carrera_exclusiva, plan_mto_dias, plan_mto_usos, mto_es_interno, mto_ligeros_max, id]);
+
+    let descripcionCambio = 'Actualización de datos generales';
+    if (esConsumible && cantidad !== undefined) {
+        await connection.query("UPDATE Tbl_Unidades_Material SET cantidad_stock = ? WHERE id_material_base = ?", [cantidad, id]);
+        descripcionCambio += ` y ajuste de stock a ${cantidad}`;
+    }
+
+    await connection.query("INSERT INTO Tbl_Historial_Materiales (id_material, accion, descripcion_cambio, id_usuario_responsable) VALUES (?, ?, ?, ?)",
+    [id, 'MODIFICACION', 'Actualización de datos generales', usuario.id_usuario]);
+
+    res.status(200).json({ mensaje: 'Actualizado correctamente' });
+  } catch (error) { 
+      console.error(error); 
+      res.status(500).json({ error: 'Error al actualizar' }); 
+  } finally {
+      connection.release();
   }
 };
 
-/**
- * PATCH /api/unidades/:id/baja
- * Da de baja una unidad física específica, cambia su estado.
- */
 export const bajaUnidad = async (req, res) => {
   const { id } = req.params;
+  const usuario = req.usuario;
+  const userRol = usuario.nombre_rol || usuario.rol;
 
   try {
-    // 1. Obtener el ID del estado de Baja.
-    const [estadoBaja] = await db.promise().query("SELECT id_estado FROM Tbl_Estados_Material WHERE nombre_estado = 'Baja'");
-    if (estadoBaja.length === 0) {
-      return res.status(500).json({ error: 'Estado "Baja" no configurado en la base de datos' });
-    }
-    const id_estado_baja = estadoBaja[0].id_estado;
+    const [unidad] = await db.promise().query("SELECT m.id_material, m.id_almacen, u.identificador_barcode FROM Tbl_Unidades_Material u JOIN Tbl_Materiales m ON u.id_material_base = m.id_material WHERE u.id_unidad = ?", [id]);
+    if (unidad.length === 0) return res.status(404).json({ error: 'Unidad no encontrada' });
+    
+    if (userRol === 'almacenista' && usuario.id_almacen && unidad[0].id_almacen !== usuario.id_almacen) return res.status(403).json({ error: 'Acceso denegado.' });
 
-    // 2. Actualizar la unidad
-    const query = "UPDATE Tbl_Unidades_Material SET id_estado = ? WHERE id_unidad = ?";
-    const [result] = await db.promise().query(query, [id_estado_baja, id]);
+    const [stBaja] = await db.promise().query("SELECT id_estado FROM Tbl_Estados_Material WHERE nombre_estado = 'Baja'");
+    await db.promise().query("UPDATE Tbl_Unidades_Material SET id_estado = ? WHERE id_unidad = ?", [stBaja[0].id_estado, id]);
 
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Unidad de material no encontrada' });
-    }
+    await db.promise().query("INSERT INTO Tbl_Historial_Materiales (id_material, id_unidad, accion, descripcion_cambio, id_usuario_responsable) VALUES (?, ?, ?, ?, ?)",
+    [unidad[0].id_material, id, 'BAJA', `Baja de unidad ${unidad[0].identificador_barcode}`, usuario.id_usuario]);
 
-    // Registrar la fecha y hora.
-    res.status(200).json({ mensaje: 'Unidad dada de baja exitosamente' });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al dar de baja la unidad' });
-  }
+    res.status(200).json({ mensaje: 'Unidad dada de baja' });
+  } catch (error) { console.error(error); res.status(500).json({ error: 'Error al dar de baja' }); }
 };
 
-/**
- * GET /api/unidades/barcode/:barcode
- * Obtiene la información de una unidad específica por su código de barras.
- * Esencial para el lector de códigos.
- */
 export const getUnidadByBarcode = async (req, res) => {
   const { barcode } = req.params;
   try {
-    const query = `
-      SELECT
-        u.id_unidad,
-        u.identificador_barcode,
-        u.cantidad_stock,
-        m.id_material,
-        m.nombre,
-        m.marca,
-        m.modelo,
-        c.nombre_categoria,
-        e.nombre_estado
-      FROM Tbl_Unidades_Material u
-      JOIN Tbl_Materiales m ON u.id_material_base = m.id_material
-      JOIN Tbl_Categorias c ON m.id_categoria = c.id_categoria
-      JOIN Tbl_Estados_Material e ON u.id_estado = e.id_estado
-      WHERE u.identificador_barcode = ?;
-    `;
-    
+    const query = `SELECT u.id_unidad, u.identificador_barcode, u.cantidad_stock, m.id_material, m.nombre, m.marca, m.modelo, c.nombre_categoria, e.nombre_estado FROM Tbl_Unidades_Material u JOIN Tbl_Materiales m ON u.id_material_base = m.id_material JOIN Tbl_Categorias c ON m.id_categoria = c.id_categoria JOIN Tbl_Estados_Material e ON u.id_estado = e.id_estado WHERE u.identificador_barcode = ?;`;
     const [unidades] = await db.promise().query(query, [barcode]);
-    
-    if (unidades.length === 0) {
-      return res.status(404).json({ error: 'Material con ese código de barras no encontrado' });
-    }
-
+    if (unidades.length === 0) return res.status(404).json({ error: 'Material no encontrado' });
     res.status(200).json({ unidad: unidades[0] });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Error al consultar el código de barras' });
-  }
+  } catch (error) { console.error(error); res.status(500).json({ error: 'Error al consultar barcode' }); }
 };

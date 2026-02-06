@@ -1,50 +1,49 @@
 import { Router } from 'express';
-import {
-  crearIncidencia,
-  getIncidencias,
-  getIncidenciaById,
-  resolverIncidencia,
-  crearRegistroMantenimiento,
-  getHistorialMantenimiento,
-  completarMantenimiento
+import { authMiddleware, almacenistaCoordinadorMiddleware } from '../middlewares/auth.js';
+
+// Importar Controladores de Mantenimiento
+import { 
+  getHistorialUnidad, 
+  registrarMantenimiento, 
+  finalizarMantenimiento 
 } from '../controllers/gestionAlmacenController.js';
 
-// Importamos los middlewares
+// Importar Controladores de Incidencias (NUEVO)
 import {
-  authMiddleware,
-  almacenistaCoordinadorMiddleware
-} from '../middlewares/auth.js';
+  getIncidencias,
+  crearIncidencia,
+  resolverIncidencia,
+  getDetalleIncidencia
+} from '../controllers/incidenciasController.js';
 
 const router = Router();
 
-/*
- * Estas rutas son de uso exclusivo para Almacenistas, Coordinadores y Administradores
- */
-router.use(authMiddleware, almacenistaCoordinadorMiddleware);
+// ==========================================
+// RUTAS DE MANTENIMIENTO
+// ==========================================
+// Ver historial completo de una unidad (disponible para todos los roles logueados)
+router.get('/mantenimiento/:id', authMiddleware, getHistorialUnidad);
 
-// Rutas de Incidencias
+// Registrar nuevo mantenimiento (Almacenista/Coord)
+router.post('/mantenimiento', authMiddleware, almacenistaCoordinadorMiddleware, registrarMantenimiento);
 
-// POST /api/gestion/incidencias - Registrar una nueva incidencia
-router.post('/incidencias', crearIncidencia);
+// Finalizar mantenimiento (Almacenista/Coord)
+router.put('/mantenimiento/:id/finalizar', authMiddleware, almacenistaCoordinadorMiddleware, finalizarMantenimiento);
 
-// GET /api/gestion/incidencias - Obtener listado de incidencias
-router.get('/incidencias', getIncidencias);
 
-// GET /api/gestion/incidencias/:id - Ver detalle de una incidencia
-router.get('/incidencias/:id', getIncidenciaById);
+// ==========================================
+// RUTAS DE INCIDENCIAS
+// ==========================================
+// Listar incidencias (filtro ?estado=Abierta opcional)
+router.get('/incidencias', authMiddleware, getIncidencias);
 
-// PATCH /api/gestion/incidencias/:id/resolver - Marcar una incidencia como cerrada
-router.patch('/incidencias/:id/resolver', resolverIncidencia);
+// Detalle de una incidencia
+router.get('/incidencias/:id', authMiddleware, getDetalleIncidencia);
 
-// Rutas de Mantenimiento
+// Crear incidencia
+router.post('/incidencias', authMiddleware, crearIncidencia);
 
-// POST /api/gestion/mantenimiento - Enviar una unidad a mantenimiento
-router.post('/mantenimiento', crearRegistroMantenimiento);
-
-// GET /api/gestion/mantenimiento/:id_unidad - Ver historial de mto. de una unidad
-router.get('/mantenimiento/:id_unidad', getHistorialMantenimiento);
-
-// PATCH /api/gestion/mantenimiento/:id/completar - Marcar un mto. como completado
-router.patch('/mantenimiento/:id/completar', completarMantenimiento);
+// Resolver/Cerrar incidencia (Almacenista/Coord)
+router.put('/incidencias/:id/resolver', authMiddleware, almacenistaCoordinadorMiddleware, resolverIncidencia);
 
 export default router;

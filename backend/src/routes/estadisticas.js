@@ -1,38 +1,30 @@
 import { Router } from 'express';
-import {
-  getResumenGeneral,
+import { 
+  getResumen, 
+  getCatalogosEstadisticas,
   getUsoMateriales,
-  getValesPorTipo,
-  getIncidenciasPorTipo,
-  getRankingMateriales
+  getValesTipo,
+  getIncidenciasTipo,
+  getRankingMateriales,
+  getEstadoInventario,
+  getMantenimientos,      // <--- Nuevo
+  getCumplimientoEntregas // <--- Nuevo
 } from '../controllers/estadisticasController.js';
-
-import {
-  authMiddleware,
-  almacenistaCoordinadorMiddleware
-} from '../middlewares/auth.js';
+import { authMiddleware } from '../middlewares/auth.js';
 
 const router = Router();
 
-/*
- * Estas rutas son de uso exclusivo para Almacenistas, Coordinadores y Administradores
- */
-router.use(authMiddleware, almacenistaCoordinadorMiddleware);
+router.get('/resumen', authMiddleware, getResumen);
+router.get('/catalogos', authMiddleware, getCatalogosEstadisticas);
 
-// GET /api/estadisticas/resumen - Tarjetas con conteos rápidos
-router.get('/resumen', getResumenGeneral);
+router.get('/uso-materiales', authMiddleware, getUsoMateriales);
+router.get('/vales-tipo', authMiddleware, getValesTipo);
+router.get('/incidencias-tipo', authMiddleware, getIncidenciasTipo);
+router.get('/ranking-materiales', authMiddleware, getRankingMateriales);
+router.get('/inventario-estado', authMiddleware, getEstadoInventario);
 
-// GET /api/estadisticas/uso-materiales - Gráfica de uso por categoría
-router.get('/uso-materiales', getUsoMateriales);
-
-// GET /api/estadisticas/vales-tipo - Gráfica de vales Clase vs. Extra-clase
-router.get('/vales-tipo', getValesPorTipo);
-
-// GET /api/estadisticas/incidencias-tipo - Gráfica de incidencias por tipo
-router.get('/incidencias-tipo', getIncidenciasPorTipo);
-
-// GET /api/estadisticas/ranking-materiales - Gráfica de Top 10 materiales más solicitados
-router.get('/ranking-materiales', getRankingMateriales);
-
+// Rutas Nuevas RQF18
+router.get('/mantenimientos', authMiddleware, getMantenimientos);
+router.get('/cumplimiento', authMiddleware, getCumplimientoEntregas);
 
 export default router;
